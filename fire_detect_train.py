@@ -9,16 +9,17 @@ from torch.utils.data import DataLoader
 np.set_printoptions(threshold=np.inf)
 transform = transforms.ToTensor()
 
-if torch.cuda.is_available():
-    print(f"GPU: {torch.cuda.get_device_name(0)} is available.")
-else:
-    print("No GPU available. Training will run on CPU.")
-
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+if torch.cuda.is_available() : 
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available() :
+    device = torch.device("mps")
+else : 
+    device = torch.device("cpu")
 print(device)
 
 
-# torchvision.transforms.ToPILImage(mode=None)
+'''--------------------------PREPROCESS-----------------------------'''
+
 class ForestFireDataset() :
     def __init__(self):
         self.image_folder_path = 'FireDataset_40m/False_color'
@@ -64,8 +65,7 @@ class ForestFireDataset() :
             i+=1
         return datas
     
-
-    '''---------------------U NEURAL NETWORK---------------------------'''
+'''--------------------------U-NET-----------------------------'''
 
 class DoubleConvEncoder(nn.Module) :
     def __init__(self, in_channels, out_channels):
@@ -160,7 +160,7 @@ def plot_loss_in_episode(episode_number, x, loss) :
     plt.xlabel('Image checkpoint')
     plt.ylabel('Dice Loss')
     plt.grid(True)
-    plt.savefig(f'figures/in_episode/episode{str(episode_number)}2.png')
+    plt.savefig(f'figures2/in_episode/episode{str(episode_number)}.png')
     
 
 def plot_loss_out_episode(x, avg_episode_loss, avg_validation_loss) :
@@ -173,7 +173,8 @@ def plot_loss_out_episode(x, avg_episode_loss, avg_validation_loss) :
     plt.ylabel('Dice Loss')
     plt.legend()  
     plt.grid(True)  
-    plt.savefig('figures/out_episode/graph2.png')
+    plt.savefig('figures2/out_episode/graph.png')
+
 '''---------------------LOSS FUNCTION---------------------------'''
 
 def dice_loss(pred, target) :
@@ -219,7 +220,6 @@ def Train_one_episode(model, optimizer, training_data, episode_number) :
         print(f'Batch: {i+1}/343')
         
     return episode_loss/len(train_loader.dataset)
- 
 
 
 '''---------------------MAIN---------------------------'''
@@ -235,7 +235,7 @@ training_data = Datas.get_list_images_masks(datas_file='FireDataset_40m/train_va
 validation_data = Datas.get_list_images_masks(datas_file='FireDataset_40m/train_val_test_data/val.txt')
 
 best_validation_loss = 1000000
-patience = 3 # Number of episode max to wait if the the evaluation score is not betterr than before
+patience = 3 # Number of episode max to wait if the the evaluation score is not better than before
 
 x=[]
 avg_episode_loss_list = []
@@ -272,7 +272,7 @@ for i in range(Episodes) :
 
     if avg_validation_loss < best_validation_loss :
         best_validation_loss = avg_validation_loss
-        model_path = 'Model_save_weights/model_weights2.pth'
+        model_path = 'Model_save_weights/model_weights.pth'
         torch.save(model.state_dict(), model_path)
         episode_no_improve = 0
 
@@ -282,86 +282,3 @@ for i in range(Episodes) :
     if episode_no_improve>patience :
         print('Early stopping triggered')
         break
-
-   
-
-# Améliorer vitesse by update le plot episode moins souvent.
-# 10 episodes =~30 min de train
-# Creer le test.py pour test le modele sur les données test et utiliser plusieurs mesures de scores, F1, accuracy ...
-# Visualiser les données test pour voir la prédiction 
-# La visualisation est la phase la plus importante car une loss de 0.15 = une similarité de 85% entre tout les PIXELS
-# -> Si il manque quelques pixels sur la prédiction ce n'est pas très grave²
-# Améliorer le score et loss ensuite en tunant les hyperparamètres
-
-
-'''
-def __init__(self):
-        self.image_folder_path = 'FireDataset_40m/False_color'
-        self.mask_folder_path ='FireDataset_40m/Masks'
-
-
-    #Put in list all the images names in order in a the file
-    def list_all_img(self, path) :
-        images = os.listdir(path)
-        return images
-    
-    #get the image with the corrresponding index
-    def get_image(self, index) : 
-        images = self.list_all_img(self.image_folder_path)
-        path_image = os.path.join(self.image_folder_path, '_Sentinel-2 L1C from 2016-08-20_SantaBarbara_BANDS-S2-L1C_0_9.tif')
-        self.image = Image.open(path_image)
-
-    #get the mask 
-    def get_mask(self, index) : 
-        masks = self.list_all_img(self.mask_folder_path)
-        path_masks = os.path.join(self.mask_folder_path, '_Sentinel-2 L1C from 2016-08-20_SantaBarbara_BANDS-S2-L1C_0_9.tif')
-        self.mask = Image.open(path_masks)
-
-    # Get the matrices 
-    def convert_matrices(self) :
-        self.get_image(1)
-        self.image_array = np.array(self.image)
-        self.matrix_r = self.image_array[:, :, 0]
-        self.matrix_g = self.image_array[:, :, 1]
-        self.matrix_b = self.image_array[:, :, 2]
-
-        self.get_mask(1)
-        self.mask_array = np.array(self.mask)
-
-    # Show all the matrices images
-    def show_matrices(self):
-
-        self.convert_matrices()
-         # Afficher les matrices R, G, B
-        fig, axes = plt.subplots(1, 5, figsize=(15, 5))
-        
-        axes[0].imshow(self.image_array)
-        axes[0].set_title('Image')
-        axes[0].axis('off')
-
-        axes[1].imshow(self.mask_array, cmap='gray')
-        axes[1].set_title('Mask')
-        axes[1].axis('off')
-
-        axes[2].imshow(self.matrix_r, cmap='Reds')
-        axes[2].set_title('Matrice R')
-        axes[2].axis('off')
-
-        axes[3].imshow(self.matrix_g, cmap='Greens')
-        axes[3].set_title('Matrice G')
-        axes[3].axis('off')
-
-        axes[4].imshow(self.matrix_b, cmap='Blues')
-        axes[4].set_title('Matrice B')
-        axes[4].axis('off')
-
-        plt.show()
-
-    # We standarized data between 0 and 1 and put them in en Tensor (to be compatible with Pytorch)
-    def standartization(self) :
-        self.tensor_r = torch.tensor((self.matrix_r/255.0))
-        self.tensor_g = torch.tensor(self.matrix_g/255.0)
-        self.tensor_b = torch.tensor(self.matrix_b/255.0)
-        self.tensor_mask = torch.tensor(self.mask_array)
-
-'''

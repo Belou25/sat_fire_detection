@@ -6,16 +6,17 @@ import torch
 import torch.nn as nn
 from torchvision import transforms
 from torch.utils.data import DataLoader
-from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score
+from sklearn.metrics import f1_score, precision_score, recall_score, accuracy_score, confusion_matrix
+import seaborn as sns
 np.set_printoptions(threshold=np.inf)
 transform = transforms.ToTensor()
 
-if torch.cuda.is_available():
-    print(f"GPU: {torch.cuda.get_device_name(0)} is available.")
-else:
-    print("No GPU available. Training will run on CPU.")
-
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+if torch.cuda.is_available() : 
+    device = torch.device("cuda")
+elif torch.backends.mps.is_available() :
+    device = torch.device("mps")
+else : 
+    device = torch.device("cpu")
 print(device)
 
 
@@ -233,6 +234,14 @@ def plot_final(tuple_arrays) :
         plt.grid(False)  
         plt.show()
 
+def plot_confusion_matrix(y_true, y_pred):
+    cm = confusion_matrix(y_true, y_pred)
+    plt.figure(figsize=(6, 6))
+    sns.heatmap(cm,annot=True,linewidth=0.5,linecolor="red",fmt=".0f")
+    plt.xlabel('Predicted labels')
+    plt.ylabel('True labels')
+    plt.title('Confusion Matrix')
+    plt.show()
 '''---------------------LOSS FUNCTION---------------------------'''
 
 def dice_loss(pred, target) :
@@ -247,7 +256,7 @@ def dice_loss(pred, target) :
 
 Episodes = 1
 model = Unet(n_channels=3, n_classes=1)
-model.load_state_dict(torch.load('Model_save_weights/model_weights.pth', weights_only=True))
+model.load_state_dict(torch.load('Model_save_weights/model_weights.pth', weights_only=True, map_location=device))
 model.to(device)
 model.eval()
 
@@ -264,6 +273,9 @@ for i in range(Episodes) :
     all_precisions = []
     all_recalls = []
     all_accuracy = []
+    all_y_true = []
+    all_y_pred = []
+
     with torch.no_grad():
         test_loader = DataLoader(test_data, batch_size=8, shuffle=True)
         
@@ -293,6 +305,10 @@ for i in range(Episodes) :
             all_recalls.append(recall)
             all_accuracy.append(accuracy)
 
+            all_y_true.extend(ttargets.cpu().numpy().flatten())
+            all_y_pred.extend(vpred.flatten())
+
+    plot_confusion_matrix(all_y_true, all_y_pred)
     avg_validation_loss = validation_loss / len(test_loader.dataset) # On divise par le nombre d'image totale
 
     # Afficher les métriques moyennes
